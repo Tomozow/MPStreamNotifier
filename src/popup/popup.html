@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MPStreamNotifier</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <h1 class="title">MPStreamNotifier</h1>
+      <div class="header-buttons">
+        <button id="refresh-button" class="icon-button" title="更新">
+          <span class="icon refresh-icon"></span>
+        </button>
+        <button id="settings-button" class="icon-button" title="設定">
+          <span class="icon settings-icon"></span>
+        </button>
+      </div>
+    </header>
+    
+    <div class="tab-container">
+      <div class="tabs">
+        <button id="all-tab" class="tab active">すべて</button>
+        <button id="twitch-tab" class="tab">Twitch</button>
+        <button id="youtube-tab" class="tab">YouTube</button>
+        <button id="twitcasting-tab" class="tab">TwitCasting</button>
+      </div>
+      <div class="filter-button-container">
+        <button id="filter-button" class="icon-button" title="フィルター">
+          <span class="icon filter-icon"></span>
+        </button>
+      </div>
+    </div>
+    
+    <div id="filter-panel" class="filter-panel hidden">
+      <!-- フィルターパネルの内容はJSで動的に生成 -->
+    </div>
+    
+    <div id="streams-container" class="streams-container">
+      <!-- 配信情報はJSで動的に生成 -->
+      <div class="loading-indicator">
+        <span>読み込み中...</span>
+      </div>
+    </div>
+    
+    <div id="error-container" class="error-container hidden">
+      <!-- エラーメッセージはJSで動的に生成 -->
+    </div>
+    
+    <footer class="footer">
+      <button id="schedule-button" class="text-button">スケジュール</button>
+      <button id="favorites-button" class="text-button">お気に入り</button>
+    </footer>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
