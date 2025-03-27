@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MPStreamNotifier - 設定</title>
+  <link rel="stylesheet" href="options.css">
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <h1>MPStreamNotifier 設定</h1>
+    </header>
+    
+    <main class="content">
+      <div class="settings-container">
+        <div class="settings-section">
+          <h2 class="section-title">Twitch設定</h2>
+          <div class="setting-item">
+            <label for="twitch-client-id">Client ID</label>
+            <input type="text" id="twitch-client-id" placeholder="Twitch Client IDを入力">
+          </div>
+          <div class="setting-item">
+            <button id="twitch-auth-button" class="auth-button">Twitchと連携する</button>
+            <div id="twitch-auth-status" class="auth-status">未連携</div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h2 class="section-title">YouTube設定</h2>
+          <div class="setting-item">
+            <label for="youtube-api-key">API Key</label>
+            <input type="text" id="youtube-api-key" placeholder="YouTube API Keyを入力">
+          </div>
+          <div class="setting-item">
+            <button id="youtube-auth-button" class="auth-button">YouTubeと連携する</button>
+            <div id="youtube-auth-status" class="auth-status">未連携</div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h2 class="section-title">TwitCasting設定</h2>
+          <div class="setting-item">
+            <label for="twitcasting-client-id">Client ID</label>
+            <input type="text" id="twitcasting-client-id" placeholder="TwitCasting Client IDを入力">
+          </div>
+          <div class="setting-item">
+            <label for="twitcasting-client-secret">Client Secret</label>
+            <input type="password" id="twitcasting-client-secret" placeholder="TwitCasting Client Secretを入力">
+          </div>
+          <div class="setting-item">
+            <button id="twitcasting-auth-button" class="auth-button">TwitCastingと連携する</button>
+            <div id="twitcasting-auth-status" class="auth-status">未連携</div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h2 class="section-title">一般設定</h2>
+          <div class="setting-item">
+            <label for="update-interval">更新間隔</label>
+            <select id="update-interval">
+              <option value="1">1分</option>
+              <option value="3">3分</option>
+              <option value="5" selected>5分</option>
+              <option value="10">10分</option>
+              <option value="15">15分</option>
+              <option value="30">30分</option>
+            </select>
+          </div>
+          <div class="setting-item checkbox-item">
+            <input type="checkbox" id="enable-notifications" checked>
+            <label for="enable-notifications">新規配信の通知を有効にする</label>
+          </div>
+        </div>
+      </div>
+    </main>
+    
+    <footer class="footer">
+      <div id="save-status" class="save-status"></div>
+      <button id="save-button" class="save-button">保存</button>
+    </footer>
+  </div>
+  <script src="options.js"></script>
+</body>
+</html>
