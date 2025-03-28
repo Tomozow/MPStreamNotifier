@@ -149,4 +149,68 @@ class NotificationManager extends Singleton {
       });
       return null;
     }
+  }
+
+  /**
+   * エラー通知を表示します
+   * @param {Object} error - エラー情報
+   * @return {Promise<string>} - 通知ID
+   */
+  async notifyError(error) {
+    try {
+      const notificationId = `error_${Date.now()}`;
+      const notificationOptions = {
+        type: 'basic',
+        title: 'エラーが発生しました',
+        message: error.message || '不明なエラーが発生しました',
+        iconUrl: '/assets/icon128.png',
+        requireInteraction: false
+      };
+      
+      await new Promise((resolve) => {
+        chrome.notifications.create(notificationId, notificationOptions, resolve);
+      });
+      
+      return notificationId;
+    } catch (err) {
+      console.error('エラー通知の表示に失敗しました', err);
+      return null;
+    }
+  }
+
+  /**
+   * カスタム通知を表示します
+   * @param {Object} options - 通知オプション
+   * @param {string} options.title - 通知タイトル
+   * @param {string} options.message - 通知メッセージ
+   * @param {string} [options.iconUrl] - 通知アイコンURL
+   * @param {Array<Object>} [options.buttons] - 通知ボタン
+   * @param {boolean} [options.requireInteraction] - ユーザーの操作が必要かどうか
+   * @return {Promise<string>} - 通知ID
+   */
+  async showCustomNotification(options) {
+    try {
+      const notificationId = `custom_${Date.now()}`;
+      const notificationOptions = {
+        type: 'basic',
+        title: options.title,
+        message: options.message,
+        iconUrl: options.iconUrl || '/assets/icon128.png',
+        buttons: options.buttons || [],
+        requireInteraction: options.requireInteraction !== undefined ? options.requireInteraction : false
+      };
+      
+      await new Promise((resolve) => {
+        chrome.notifications.create(notificationId, notificationOptions, resolve);
+      });
+      
+      return notificationId;
+    } catch (error) {
+      this.eventEmitter.emit('error', {
+        code: 'NOTIFICATION_ERROR',
+        message: 'カスタム通知の表示に失敗しました',
+        details: error
+      });
+      return null;
+    }
   }}
