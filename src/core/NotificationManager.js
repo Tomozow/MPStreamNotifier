@@ -219,6 +219,59 @@ class NotificationManager extends Singleton {
   }
 
   /**
+   * 汎用的な通知を表示します
+   * @param {string} notificationId - 通知の一意のID
+   * @param {Object} options - 通知オプション
+   * @param {string} [linkUrl] - 通知クリック時に開くURL
+   * @return {Promise<boolean>} - 成功したかどうか
+   */
+  async showNotification(notificationId, options, linkUrl = null) {
+    try {
+      // リンクURLがある場合は保存（通知クリック時に使用）
+      if (linkUrl) {
+        await new Promise((resolve) => {
+          chrome.storage.local.set({ [`notification_url_${notificationId}`]: linkUrl }, resolve);
+        });
+      }
+
+      // 通知を作成
+      await new Promise((resolve) => {
+        chrome.notifications.create(notificationId, {
+          type: options.type || 'basic',
+          iconUrl: options.iconUrl || '/assets/icon128.png',
+          title: options.title || '',
+          message: options.message || '',
+          contextMessage: options.contextMessage || '',
+          priority: options.priority || 0,
+          buttons: options.buttons || [],
+          requireInteraction: options.requireInteraction !== undefined ? options.requireInteraction : false,
+          silent: options.silent !== undefined ? options.silent : false,
+          ...(options.items && { items: options.items }),
+          ...(options.imageUrl && { imageUrl: options.imageUrl }),
+          ...(options.progress && { progress: options.progress }),
+          ...(options.groupId && { eventTime: options.eventTime })
+        }, resolve);
+      });
+      
+      // イベント発火
+      this.eventEmitter.emit('notification:shown', { 
+        id: notificationId, 
+        options,
+        linkUrl
+      });
+      
+      return true;
+    } catch (error) {
+      this.eventEmitter.emit('error', {
+        code: 'NOTIFICATION_ERROR',
+        message: '通知の表示に失敗しました',
+        details: error
+      });
+      return false;
+    }
+  }
+
+  /**
    * 通知をクリアします
    * @param {string} notificationId - 通知ID
    * @return {Promise<boolean>} - 成功したかどうか
@@ -322,6 +375,60 @@ class NotificationManager extends Singleton {
     
     // 通知を閉じる
     this.clearNotification(notificationId);
+  }
+
+  /**
+   * 通知クリック時の処理を実行します（background.jsから呼び出し用）
+   * @param {string} notificationId - 通知ID
+   */
+  async handleNotificationClicked(notificationId) {
+    // 保存されているURLがあれば開く
+    try {
+      const result = await new Promise((resolve) => {
+        chrome.storage.local.get(`notification_url_${notificationId}`, resolve);
+      });
+      
+      const url = result[`notification_url_${notificationId}`];
+      if (url) {
+        chrome.tabs.create({ url });
+        // 使用後は削除
+        chrome.storage.local.remove(`notification_url_${notificationId}`);
+      }
+      
+      // イベント発火
+      this.eventEmitter.emit('notification:clicked', { id: notificationId });
+    } catch (error) {
+      console.error('通知クリック処理でエラーが発生しました', error);
+    }
+  }
+  
+  /**
+   * 通知ボタンクリック時の処理を実行します（background.jsから呼び出し用）
+   * @param {string} notificationId - 通知ID
+   * @param {number} buttonIndex - クリックされたボタンのインデックス
+   */
+  async handleNotificationButtonClicked(notificationId, buttonIndex) {
+    try {
+      // 保存されているURLがあれば開く
+      const result = await new Promise((resolve) => {
+        chrome.storage.local.get(`notification_url_${notificationId}`, resolve);
+      });
+      
+      const url = result[`notification_url_${notificationId}`];
+      if (url) {
+        chrome.tabs.create({ url });
+        // 使用後は削除
+        chrome.storage.local.remove(`notification_url_${notificationId}`);
+      }
+      
+      // イベント発火
+      this.eventEmitter.emit('notification:buttonClicked', { 
+        id: notificationId,
+        buttonIndex
+      });
+    } catch (error) {
+      console.error('通知ボタンクリック処理でエラーが発生しました', error);
+    }
   }
 
   /**
