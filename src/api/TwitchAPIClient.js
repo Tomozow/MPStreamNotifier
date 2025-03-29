@@ -125,3 +125,123 @@ class TwitchAPIClient extends BaseAPIClient {
       return false;
     }
   }
+
+  /**
+   * 現在のアクセストークンを検証します
+   * @private
+   * @return {Promise<Object>} - トークン情報
+   */
+  async validateToken() {
+    if (!this.auth.accessToken) {
+      throw new Error('アクセストークンがありません');
+    }
+    
+    const response = await fetch(`${this.authUrl}/validate`, {
+      headers: {
+        'Authorization': `OAuth ${this.auth.accessToken}`
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`トークン検証に失敗しました: ${response.status}`);
+    }
+    
+    return await response.json();
+  }
+
+  /**
+   * リフレッシュトークンを使ってアクセストークンを更新します
+   * @private
+   * @return {Promise<Auth>} - 更新された認証情報
+   */
+  async refreshToken() {
+    if (!this.clientId) {
+      throw new Error('Twitch Client IDが設定されていません');
+    }
+    
+    if (!this.auth.refreshToken) {
+      throw new Error('リフレッシュトークンがありません');
+    }
+    
+    const response = await fetch(`${this.authUrl}/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      },
+      body: new URLSearchParams({
+        client_id: this.clientId,
+        grant_type: 'refresh_token',
+        refresh_token: this.auth.refreshToken
+      })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`トークンのリフレッシュに失敗しました: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    
+    // 認証情報を更新
+    this.auth = new Auth({
+      ...this.auth,
+      accessToken: data.access_token,
+      refreshToken: data.refresh_token || this.auth.refreshToken,
+      expiresAt: Date.now() + (data.expires_in * 1000),
+      isAuthorized: true
+    });
+    
+    // chromeストレージに保存
+    await this.saveAuthToStorage();
+    
+    this.eventEmitter.emit('client:tokenRefreshed', {
+      platformType: this.platformType
+    });
+    
+    return this.auth;
+  }
+
+  /**
+   * 認証情報をストレージに保存します
+   * @private
+   * @return {Promise<void>}
+   */
+  async saveAuthToStorage() {
+    return new Promise((resolve, reject) => {
+      chrome.storage.local.set({
+        twitch_auth: {
+          clientId: this.auth.clientId,
+          accessToken: this.auth.accessToken,
+          refreshToken: this.auth.refreshToken,
+          expiresAt: this.auth.expiresAt,
+          isAuthorized: this.auth.isAuthorized,
+          userId: this.auth.userId,
+          userName: this.auth.userName
+        }
+      }, () => {
+        if (chrome.runtime.lastError) {
+          reject(chrome.runtime.lastError);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
+   * 認証情報をクリアします
+   * @return {void}
+   */
+  clearAuth() {
+    this.auth = new Auth({ platformType: 'twitch' });
+    
+    // ストレージからも削除
+    chrome.storage.local.remove('twitch_auth', () => {
+      if (chrome.runtime.lastError) {
+        console.error('Twitch認証情報の削除に失敗しました', chrome.runtime.lastError);
+      }
+    });
+    
+    this.eventEmitter.emit('client:authCleared', {
+      platformType: this.platformType
+    });
+  }
