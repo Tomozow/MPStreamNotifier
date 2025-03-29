@@ -67,3 +67,61 @@ class TwitchAPIClient extends BaseAPIClient {
     
     return super.initialize();
   }
+
+  /**
+   * トークンの有効期限をチェックし、必要に応じてリフレッシュを試みます
+   * @private
+   * @return {Promise<boolean>} - トークンが有効かどうか
+   */
+  async checkTokenExpiration() {
+    // 認証情報がなければ何もしない
+    if (!this.auth.isAuthorized || !this.auth.accessToken) {
+      return false;
+    }
+    
+    // 有効期限を確認
+    const now = Date.now();
+    const expiresAt = this.auth.expiresAt;
+    
+    // 有効期限まで10分を切っている場合はリフレッシュを試みる
+    if (expiresAt && now >= expiresAt - 600000) {
+      try {
+        // リフレッシュトークンがあればリフレッシュを試みる
+        if (this.auth.refreshToken) {
+          await this.refreshToken();
+          return true;
+        } else {
+          // リフレッシュトークンがない場合は認証情報をクリア
+          this.clearAuth();
+          this.eventEmitter.emit('client:authExpired', { 
+            platformType: this.platformType
+          });
+          return false;
+        }
+      } catch (error) {
+        // リフレッシュ失敗時も認証情報をクリア
+        this.clearAuth();
+        this.eventEmitter.emit('client:authError', {
+          platformType: this.platformType,
+          error,
+          reason: 'token_refresh_failed'
+        });
+        return false;
+      }
+    }
+    
+    // 有効期限内の場合はトークンを検証
+    try {
+      await this.validateToken();
+      return true;
+    } catch (error) {
+      // トークン検証失敗時は認証情報をクリア
+      this.clearAuth();
+      this.eventEmitter.emit('client:authError', {
+        platformType: this.platformType,
+        error,
+        reason: 'token_validation_failed'
+      });
+      return false;
+    }
+  }
