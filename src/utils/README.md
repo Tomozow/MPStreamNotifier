@@ -33,6 +33,13 @@ const myListener = (data) => console.log(data);
 emitter.on('customEvent', myListener);
 emitter.off('customEvent', myListener); // 特定のリスナーを削除
 emitter.off('customEvent'); // そのイベントのすべてのリスナーを削除
+
+// すべてのイベントリスナーを削除
+emitter.removeAllListeners();
+
+// 登録されているイベント名を取得
+const eventNames = emitter.eventNames();
+console.log('登録されているイベント:', eventNames);
 ```
 
 ## EventTypes

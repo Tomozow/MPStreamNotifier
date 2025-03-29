@@ -94,6 +94,39 @@ describe('EventEmitter', () => {
     emitter.off('testEvent');
     expect(emitter.listenerCount('testEvent')).toBe(0);
   });
+
+  test('should remove all listeners', () => {
+    const mockCallback1 = jest.fn();
+    const mockCallback2 = jest.fn();
+    const mockCallback3 = jest.fn();
+    
+    emitter.on('event1', mockCallback1);
+    emitter.on('event2', mockCallback2);
+    emitter.on('event3', mockCallback3);
+    
+    emitter.removeAllListeners();
+    
+    emitter.emit('event1');
+    emitter.emit('event2');
+    emitter.emit('event3');
+    
+    expect(mockCallback1).not.toHaveBeenCalled();
+    expect(mockCallback2).not.toHaveBeenCalled();
+    expect(mockCallback3).not.toHaveBeenCalled();
+  });
+  
+  test('should return all event names', () => {
+    emitter.on('event1', () => {});
+    emitter.on('event2', () => {});
+    emitter.on('event3', () => {});
+    
+    const eventNames = emitter.eventNames();
+    
+    expect(eventNames).toContain('event1');
+    expect(eventNames).toContain('event2');
+    expect(eventNames).toContain('event3');
+    expect(eventNames.length).toBe(3);
+  });
 });
 
 describe('EventTypes integration with EventEmitter', () => {
