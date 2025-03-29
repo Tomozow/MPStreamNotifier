@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MPStreamNotifier - 配信スケジュール</title>
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <h1>配信スケジュール</h1>
+      <div class="controls">
+        <button id="refreshButton" class="refresh-button">更新</button>
+        <button id="filterButton" class="filter-button">フィルター</button>
+        <div class="view-mode">
+          <button id="listViewButton" class="view-button active">リスト表示</button>
+          <button id="calendarViewButton" class="view-button">カレンダー表示</button>
+        </div>
+      </div>
+    </header>
+    
+    <div id="filterPanel" class="filter-panel hidden">
+      <div class="filter-options">
+        <div class="filter-group">
+          <h3>プラットフォーム</h3>
+          <label><input type="checkbox" id="filterTwitch" checked> Twitch</label>
+          <label><input type="checkbox" id="filterYouTube" checked> YouTube</label>
+          <label><input type="checkbox" id="filterTwitCasting" checked> TwitCasting</label>
+        </div>
+        <div class="filter-group">
+          <h3>表示オプション</h3>
+          <label><input type="checkbox" id="filterFavorites"> お気に入りのみ</label>
+          <label><input type="checkbox" id="filterWeek" checked> 1週間以内</label>
+          <label><input type="checkbox" id="filterMonth" checked> 1ヶ月以内</label>
+        </div>
+      </div>
+      <div class="filter-actions">
+        <button id="applyFilters">適用</button>
+        <button id="resetFilters">リセット</button>
+      </div>
+    </div>
+    
+    <main class="content">
+      <div id="loading" class="loading-indicator">読み込み中...</div>
+      <div id="error" class="error-message hidden"></div>
+      
+      <div id="listView" class="schedule-list-view">
+        <!-- リスト表示のためのコンテナ -->
+      </div>
+      
+      <div id="calendarView" class="schedule-calendar-view hidden">
+        <!-- カレンダー表示のためのコンテナ -->
+      </div>
+    </main>
+    
+    <div id="statusBar" class="status-bar">
+      <span id="lastUpdated">最終更新: --:--</span>
+      <span id="scheduleCount">0 予定</span>
+    </div>
+  </div>
+</body>
+</html>

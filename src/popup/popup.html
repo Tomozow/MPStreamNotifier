@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MPStreamNotifier</title>
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <h1>MPStreamNotifier</h1>
+      <div class="controls">
+        <button id="refreshButton" class="refresh-button">更新</button>
+        <button id="filterButton" class="filter-button">フィルター</button>
+        <button id="settingsButton" class="settings-button">設定</button>
+      </div>
+    </header>
+    
+    <div id="filterPanel" class="filter-panel hidden">
+      <div class="filter-options">
+        <div class="filter-group">
+          <h3>プラットフォーム</h3>
+          <label><input type="checkbox" id="filterTwitch" checked> Twitch</label>
+          <label><input type="checkbox" id="filterYouTube" checked> YouTube</label>
+          <label><input type="checkbox" id="filterTwitCasting" checked> TwitCasting</label>
+        </div>
+        <div class="filter-group">
+          <h3>表示オプション</h3>
+          <label><input type="checkbox" id="filterFavorites"> お気に入りのみ</label>
+          <label><input type="checkbox" id="filterLive" checked> ライブ配信</label>
+          <label><input type="checkbox" id="filterScheduled" checked> 予定配信</label>
+        </div>
+      </div>
+      <div class="filter-actions">
+        <button id="applyFilters">適用</button>
+        <button id="resetFilters">リセット</button>
+      </div>
+    </div>
+    
+    <main class="content">
+      <div id="loading" class="loading-indicator">読み込み中...</div>
+      <div id="error" class="error-message hidden"></div>
+      <div id="streamsContainer" class="streams-container"></div>
+    </main>
+    
+    <div id="statusBar" class="status-bar">
+      <span id="lastUpdated">最終更新: --:--</span>
+      <span id="streamCount">0 配信</span>
+    </div>
+  </div>
+</body>
+</html>

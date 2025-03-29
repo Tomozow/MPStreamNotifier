@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MPStreamNotifier - 設定</title>
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <h1>MPStreamNotifier 設定</h1>
+    </header>
+    
+    <main class="content">
+      <div class="settings-container">
+        <section class="settings-section">
+          <h2>一般設定</h2>
+          <div class="setting-item">
+            <label for="updateInterval">更新間隔（分）</label>
+            <input type="number" id="updateInterval" min="1" max="60" value="5">
+          </div>
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" id="startupRefresh" checked>
+              起動時に配信情報を更新する
+            </label>
+          </div>
+        </section>
+        
+        <section class="settings-section">
+          <h2>通知設定</h2>
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" id="enableNotifications" checked>
+              新規配信の通知を表示
+            </label>
+          </div>
+          <div class="setting-item">
+            <label>
+              <input type="checkbox" id="notifyFavoritesOnly">
+              お気に入りの配信者のみ通知
+            </label>
+          </div>
+          <div class="setting-item">
+            <label for="notificationDuration">通知表示時間（秒）</label>
+            <input type="number" id="notificationDuration" min="5" max="30" value="10">
+          </div>
+        </section>
+        
+        <section class="settings-section">
+          <h2>API 設定</h2>
+          <div class="setting-item">
+            <label for="twitchClientId">Twitch Client ID</label>
+            <input type="text" id="twitchClientId" placeholder="Twitch API Client ID">
+            <button id="twitchAuth" class="secondary">Twitchで認証</button>
+            <div id="twitchAuthStatus" class="auth-status"></div>
+          </div>
+          <div class="setting-item">
+            <label for="youtubeApiKey">YouTube API Key</label>
+            <input type="text" id="youtubeApiKey" placeholder="YouTube API Key">
+          </div>
+          <div class="setting-item">
+            <label for="twitcastingClientId">TwitCasting Client ID</label>
+            <input type="text" id="twitcastingClientId" placeholder="TwitCasting Client ID">
+          </div>
+        </section>
+      </div>
+      
+      <div class="actions">
+        <button id="saveSettings" class="primary">保存</button>
+        <button id="resetSettings">リセット</button>
+      </div>
+    </main>
+    
+    <div id="statusMessage" class="status-message hidden"></div>
+  </div>
+</body>
+</html>

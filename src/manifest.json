@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "MPStreamNotifier",
+  "version": "0.1.0",
+  "description": "多プラットフォーム配信通知拡張機能 - Twitch、YouTube、TwitCastingの配信状況を一元管理",
+  "permissions": [
+    "storage",
+    "alarms",
+    "notifications",
+    "identity"
+  ],
+  "host_permissions": [
+    "https://*.twitch.tv/*",
+    "https://*.youtube.com/*",
+    "https://*.twitcasting.tv/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "assets/icon16.png",
+      "48": "assets/icon48.png",
+      "128": "assets/icon128.png"
+    }
+  },
+  "options_page": "options.html",
+  "icons": {
+    "16": "assets/icon16.png",
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
+  }
+}

@@ -127,121 +127,621 @@ class TwitchAPIClient extends BaseAPIClient {
   }
 
   /**
-   * 現在のアクセストークンを検証します
-   * @private
-   * @return {Promise<Object>} - トークン情報
+   * デフォルトのリクエストオプションを取得します
+   * @return {Object} - デフォルトオプション
+   * @protected
+   * @override
    */
-  async validateToken() {
-    if (!this.auth.accessToken) {
-      throw new Error('アクセストークンがありません');
+  getDefaultRequestOptions() {
+    const options = super.getDefaultRequestOptions();
+    
+    // 認証ヘッダーを追加
+    if (this.auth.accessToken) {
+      options.headers['Authorization'] = `Bearer ${this.auth.accessToken}`;
     }
     
-    const response = await fetch(`${this.authUrl}/validate`, {
-      headers: {
-        'Authorization': `OAuth ${this.auth.accessToken}`
-      }
-    });
-    
-    if (!response.ok) {
-      throw new Error(`トークン検証に失敗しました: ${response.status}`);
+    // Client-IDヘッダーを追加
+    if (this.clientId) {
+      options.headers['Client-ID'] = this.clientId;
     }
     
-    return await response.json();
+    return options;
   }
 
   /**
-   * リフレッシュトークンを使ってアクセストークンを更新します
-   * @private
-   * @return {Promise<Auth>} - 更新された認証情報
+   * レートリミット情報を更新します
+   * @param {Response} response - フェッチレスポンス
+   * @protected
+   * @override
    */
-  async refreshToken() {
+  updateRateLimitInfo(response) {
+    // Twitchのレートリミットヘッダーを解析
+    const rateLimit = response.headers.get('Ratelimit-Limit');
+    const rateRemaining = response.headers.get('Ratelimit-Remaining');
+    const rateReset = response.headers.get('Ratelimit-Reset');
+    
+    if (rateLimit) {
+      this.rateLimitInfo.limit = parseInt(rateLimit, 10);
+    }
+    
+    if (rateRemaining) {
+      this.rateLimitInfo.remaining = parseInt(rateRemaining, 10);
+    }
+    
+    if (rateReset) {
+      this.rateLimitInfo.resetTime = parseInt(rateReset, 10) * 1000; // 秒からミリ秒に変換
+    }
+  }
+
+  /**
+   * APIエラーを処理します
+   * @param {Error} error - エラーオブジェクト
+   * @param {string} endpoint - APIエンドポイント
+   * @return {Error} - 処理されたエラー
+   * @protected
+   * @override
+   */
+  handleApiError(error, endpoint) {
+    // 401エラーの場合は認証切れとして処理
+    if (error.status === 401) {
+      this.eventEmitter.emit('client:authError', {
+        platformType: this.platformType,
+        error,
+        reason: 'token_invalid',
+        endpoint
+      });
+      
+      // クライアント側で非認証状態に戻す
+      this.clearAuth();
+      
+      const authError = new Error('認証が無効になりました。再認証が必要です。');
+      authError.originalError = error;
+      authError.endpoint = endpoint;
+      authError.platformType = this.platformType;
+      authError.code = 'AUTH_ERROR';
+      
+      return authError;
+    }
+    
+    return super.handleApiError(error, endpoint);
+  }
+
+  /**
+   * Twitchで認証を行います
+   * @param {Object} options - 認証オプション
+   * @return {Promise<Auth>} - 認証情報
+   * @override
+   */
+  async authenticate(options = {}) {
     if (!this.clientId) {
       throw new Error('Twitch Client IDが設定されていません');
     }
     
-    if (!this.auth.refreshToken) {
-      throw new Error('リフレッシュトークンがありません');
-    }
-    
-    const response = await fetch(`${this.authUrl}/token`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded'
-      },
-      body: new URLSearchParams({
-        client_id: this.clientId,
-        grant_type: 'refresh_token',
-        refresh_token: this.auth.refreshToken
-      })
-    });
-    
-    if (!response.ok) {
-      throw new Error(`トークンのリフレッシュに失敗しました: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    // 認証情報を更新
-    this.auth = new Auth({
-      ...this.auth,
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token || this.auth.refreshToken,
-      expiresAt: Date.now() + (data.expires_in * 1000),
-      isAuthorized: true
-    });
-    
-    // chromeストレージに保存
-    await this.saveAuthToStorage();
-    
-    this.eventEmitter.emit('client:tokenRefreshed', {
-      platformType: this.platformType
-    });
-    
-    return this.auth;
-  }
-
-  /**
-   * 認証情報をストレージに保存します
-   * @private
-   * @return {Promise<void>}
-   */
-  async saveAuthToStorage() {
-    return new Promise((resolve, reject) => {
-      chrome.storage.local.set({
-        twitch_auth: {
-          clientId: this.auth.clientId,
-          accessToken: this.auth.accessToken,
-          refreshToken: this.auth.refreshToken,
-          expiresAt: this.auth.expiresAt,
-          isAuthorized: this.auth.isAuthorized,
-          userId: this.auth.userId,
-          userName: this.auth.userName
-        }
-      }, () => {
-        if (chrome.runtime.lastError) {
-          reject(chrome.runtime.lastError);
-        } else {
-          resolve();
-        }
+    try {
+      // 認証URLの構築
+      const authUrl = new URL(`${this.authUrl}/authorize`);
+      authUrl.searchParams.append('client_id', this.clientId);
+      authUrl.searchParams.append('redirect_uri', this.redirectUri);
+      authUrl.searchParams.append('response_type', 'token');
+      authUrl.searchParams.append('scope', this.scopes.join(' '));
+      
+      // Chrome拡張機能のOAuth認証フロー
+      const responseUrl = await new Promise((resolve, reject) => {
+        chrome.identity.launchWebAuthFlow({
+          url: authUrl.toString(),
+          interactive: true
+        }, (redirectUrl) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(redirectUrl);
+          }
+        });
       });
-    });
+      
+      // リダイレクトURLからトークン情報を抽出
+      const hashParams = new URLSearchParams(new URL(responseUrl).hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const expiresIn = parseInt(hashParams.get('expires_in'), 10);
+      
+      if (!accessToken) {
+        throw new Error('アクセストークンの取得に失敗しました');
+      }
+      
+      // ユーザー情報の取得
+      const userInfo = await this.getUserInfo(accessToken);
+      
+      // 認証情報の更新
+      this.auth = new Auth({
+        platformType: 'twitch',
+        clientId: this.clientId,
+        accessToken,
+        expiresAt: Date.now() + (expiresIn * 1000),
+        isAuthorized: true,
+        userId: userInfo.id,
+        userName: userInfo.login
+      });
+      
+      // chromeストレージに保存
+      await this.saveAuthToStorage();
+      
+      this.eventEmitter.emit('client:authenticated', {
+        platformType: this.platformType,
+        userId: userInfo.id,
+        userName: userInfo.login
+      });
+      
+      return this.auth;
+    } catch (error) {
+      this.eventEmitter.emit('client:authError', {
+        platformType: this.platformType,
+        error,
+        reason: 'authentication_failed'
+      });
+      throw this.handleApiError(error, 'authenticate');
+    }
   }
 
   /**
-   * 認証情報をクリアします
-   * @return {void}
+   * ユーザー情報を取得します
+   * @param {string} accessToken - アクセストークン
+   * @return {Promise<Object>} - ユーザー情報
+   * @private
    */
-  clearAuth() {
-    this.auth = new Auth({ platformType: 'twitch' });
-    
-    // ストレージからも削除
-    chrome.storage.local.remove('twitch_auth', () => {
-      if (chrome.runtime.lastError) {
-        console.error('Twitch認証情報の削除に失敗しました', chrome.runtime.lastError);
+  async getUserInfo(accessToken) {
+    const response = await fetch(`${this.baseUrl}/users`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Client-ID': this.clientId
       }
     });
     
-    this.eventEmitter.emit('client:authCleared', {
-      platformType: this.platformType
-    });
+    if (!response.ok) {
+      throw new Error(`ユーザー情報の取得に失敗しました: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.data[0] || {};
   }
+
+  /**
+   * 認証状態を確認します
+   * @return {Promise<boolean>} - 認証が有効かどうか
+   */
+  async isAuthenticated() {
+    // 認証情報が無い場合
+    if (!this.auth.isAuthorized || !this.auth.accessToken) {
+      return false;
+    }
+    
+    // トークンの有効期限チェック
+    return await this.checkTokenExpiration();
+  }
+
+  /**
+   * 指定したユーザーがフォローしている配信者の情報を取得します
+   * @param {string} userId - ユーザーID
+   * @param {Object} options - オプション
+   * @return {Promise<Array>} - フォロー情報の配列
+   */
+  async getFollowedChannels(userId = null, options = {}) {
+    if (!userId && this.auth.userId) {
+      userId = this.auth.userId;
+    }
+    
+    if (!userId) {
+      throw new Error('ユーザーIDが指定されていません');
+    }
+    
+    try {
+      // APIエンドポイントの構築
+      const endpoint = new URL(`${this.baseUrl}/users/follows`);
+      endpoint.searchParams.append('from_id', userId);
+      
+      // ページネーション
+      if (options.first) {
+        endpoint.searchParams.append('first', options.first);
+      } else {
+        endpoint.searchParams.append('first', 100); // デフォルト最大値
+      }
+      
+      if (options.after) {
+        endpoint.searchParams.append('after', options.after);
+      }
+      
+      // APIリクエスト
+      const data = await this.request(endpoint.toString());
+      
+      return data.data;
+    } catch (error) {
+      throw this.handleApiError(error, 'getFollowedChannels');
+    }
+  }
+
+  /**
+   * ストリーム情報を取得します
+   * @param {Object} options - 取得オプション
+   * @return {Promise<Array<Stream>>} - ストリーム情報の配列
+   * @override
+   */
+  async getStreams(options = {}) {
+    try {
+      // 認証状態の確認
+      await this.checkTokenExpiration();
+      
+      // オプションの準備
+      const endpoint = new URL(`${this.baseUrl}/streams`);
+      
+      // ゲーム/カテゴリによるフィルタリング
+      if (options.gameId) {
+        endpoint.searchParams.append('game_id', options.gameId);
+      }
+      
+      // 特定のユーザーのストリームを取得
+      if (options.userId) {
+        endpoint.searchParams.append('user_id', Array.isArray(options.userId) ? options.userId.join('&user_id=') : options.userId);
+      }
+      
+      // 言語フィルタリング
+      if (options.language) {
+        endpoint.searchParams.append('language', options.language);
+      }
+      
+      // ページネーション
+      if (options.first) {
+        endpoint.searchParams.append('first', options.first);
+      } else {
+        endpoint.searchParams.append('first', 20); // デフォルト
+      }
+      
+      if (options.after) {
+        endpoint.searchParams.append('after', options.after);
+      }
+      
+      // APIリクエスト
+      const data = await this.request(endpoint.toString());
+      
+      // レスポンスデータをStreamモデルに変換
+      return data.data.map(stream => new Stream({
+        id: stream.id,
+        title: stream.title,
+        streamerName: stream.user_name,
+        thumbnailUrl: stream.thumbnail_url
+          .replace('{width}', '320')
+          .replace('{height}', '180'),
+        platformType: 'twitch',
+        startedAt: new Date(stream.started_at).getTime(),
+        viewerCount: stream.viewer_count,
+        gameOrCategory: stream.game_name,
+        url: `https://twitch.tv/${stream.user_login}`,
+        isFavorite: false, // お気に入り状態は別途設定
+        notified: false // 通知済みかどうかも別途設定
+      }));
+    } catch (error) {
+      throw this.handleApiError(error, 'getStreams');
+    }
+  }
+
+  /**
+   * スケジュール情報を取得します
+   * @param {Object} options - 取得オプション
+   * @return {Promise<Array<Schedule>>} - スケジュール情報の配列
+   * @override
+   */
+  async getSchedules(options = {}) {
+    // スケジュール機能の実装は今後のフェーズで行う
+    return Promise.resolve([]);
+  }
+}
+
+export default TwitchAPIClient;
+
+  /**
+   * デフォルトのリクエストオプションを取得します
+   * @return {Object} - デフォルトオプション
+   * @protected
+   * @override
+   */
+  getDefaultRequestOptions() {
+    const options = super.getDefaultRequestOptions();
+    
+    // 認証ヘッダーを追加
+    if (this.auth.accessToken) {
+      options.headers['Authorization'] = `Bearer ${this.auth.accessToken}`;
+    }
+    
+    // Client-IDヘッダーを追加
+    if (this.clientId) {
+      options.headers['Client-ID'] = this.clientId;
+    }
+    
+    return options;
+  }
+
+  /**
+   * レートリミット情報を更新します
+   * @param {Response} response - フェッチレスポンス
+   * @protected
+   * @override
+   */
+  updateRateLimitInfo(response) {
+    // Twitchのレートリミットヘッダーを解析
+    const rateLimit = response.headers.get('Ratelimit-Limit');
+    const rateRemaining = response.headers.get('Ratelimit-Remaining');
+    const rateReset = response.headers.get('Ratelimit-Reset');
+    
+    if (rateLimit) {
+      this.rateLimitInfo.limit = parseInt(rateLimit, 10);
+    }
+    
+    if (rateRemaining) {
+      this.rateLimitInfo.remaining = parseInt(rateRemaining, 10);
+    }
+    
+    if (rateReset) {
+      this.rateLimitInfo.resetTime = parseInt(rateReset, 10) * 1000; // 秒からミリ秒に変換
+    }
+  }
+
+  /**
+   * APIエラーを処理します
+   * @param {Error} error - エラーオブジェクト
+   * @param {string} endpoint - APIエンドポイント
+   * @return {Error} - 処理されたエラー
+   * @protected
+   * @override
+   */
+  handleApiError(error, endpoint) {
+    // 401エラーの場合は認証切れとして処理
+    if (error.status === 401) {
+      this.eventEmitter.emit('client:authError', {
+        platformType: this.platformType,
+        error,
+        reason: 'token_invalid',
+        endpoint
+      });
+      
+      // クライアント側で非認証状態に戻す
+      this.clearAuth();
+      
+      const authError = new Error('認証が無効になりました。再認証が必要です。');
+      authError.originalError = error;
+      authError.endpoint = endpoint;
+      authError.platformType = this.platformType;
+      authError.code = 'AUTH_ERROR';
+      
+      return authError;
+    }
+    
+    return super.handleApiError(error, endpoint);
+  }
+
+  /**
+   * Twitchで認証を行います
+   * @param {Object} options - 認証オプション
+   * @return {Promise<Auth>} - 認証情報
+   * @override
+   */
+  async authenticate(options = {}) {
+    if (!this.clientId) {
+      throw new Error('Twitch Client IDが設定されていません');
+    }
+    
+    try {
+      // 認証URLの構築
+      const authUrl = new URL(`${this.authUrl}/authorize`);
+      authUrl.searchParams.append('client_id', this.clientId);
+      authUrl.searchParams.append('redirect_uri', this.redirectUri);
+      authUrl.searchParams.append('response_type', 'token');
+      authUrl.searchParams.append('scope', this.scopes.join(' '));
+      
+      // Chrome拡張機能のOAuth認証フロー
+      const responseUrl = await new Promise((resolve, reject) => {
+        chrome.identity.launchWebAuthFlow({
+          url: authUrl.toString(),
+          interactive: true
+        }, (redirectUrl) => {
+          if (chrome.runtime.lastError) {
+            reject(new Error(chrome.runtime.lastError.message));
+          } else {
+            resolve(redirectUrl);
+          }
+        });
+      });
+      
+      // リダイレクトURLからトークン情報を抽出
+      const hashParams = new URLSearchParams(new URL(responseUrl).hash.substring(1));
+      const accessToken = hashParams.get('access_token');
+      const expiresIn = parseInt(hashParams.get('expires_in'), 10);
+      
+      if (!accessToken) {
+        throw new Error('アクセストークンの取得に失敗しました');
+      }
+      
+      // ユーザー情報の取得
+      const userInfo = await this.getUserInfo(accessToken);
+      
+      // 認証情報の更新
+      this.auth = new Auth({
+        platformType: 'twitch',
+        clientId: this.clientId,
+        accessToken,
+        expiresAt: Date.now() + (expiresIn * 1000),
+        isAuthorized: true,
+        userId: userInfo.id,
+        userName: userInfo.login
+      });
+      
+      // chromeストレージに保存
+      await this.saveAuthToStorage();
+      
+      this.eventEmitter.emit('client:authenticated', {
+        platformType: this.platformType,
+        userId: userInfo.id,
+        userName: userInfo.login
+      });
+      
+      return this.auth;
+    } catch (error) {
+      this.eventEmitter.emit('client:authError', {
+        platformType: this.platformType,
+        error,
+        reason: 'authentication_failed'
+      });
+      throw this.handleApiError(error, 'authenticate');
+    }
+  }
+
+  /**
+   * ユーザー情報を取得します
+   * @param {string} accessToken - アクセストークン
+   * @return {Promise<Object>} - ユーザー情報
+   * @private
+   */
+  async getUserInfo(accessToken) {
+    const response = await fetch(`${this.baseUrl}/users`, {
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Client-ID': this.clientId
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`ユーザー情報の取得に失敗しました: ${response.status}`);
+    }
+    
+    const data = await response.json();
+    return data.data[0] || {};
+  }
+
+  /**
+   * 認証状態を確認します
+   * @return {Promise<boolean>} - 認証が有効かどうか
+   */
+  async isAuthenticated() {
+    // 認証情報が無い場合
+    if (!this.auth.isAuthorized || !this.auth.accessToken) {
+      return false;
+    }
+    
+    // トークンの有効期限チェック
+    return await this.checkTokenExpiration();
+  }
+
+  /**
+   * 指定したユーザーがフォローしている配信者の情報を取得します
+   * @param {string} userId - ユーザーID
+   * @param {Object} options - オプション
+   * @return {Promise<Array>} - フォロー情報の配列
+   */
+  async getFollowedChannels(userId = null, options = {}) {
+    if (!userId && this.auth.userId) {
+      userId = this.auth.userId;
+    }
+    
+    if (!userId) {
+      throw new Error('ユーザーIDが指定されていません');
+    }
+    
+    try {
+      // APIエンドポイントの構築
+      const endpoint = new URL(`${this.baseUrl}/users/follows`);
+      endpoint.searchParams.append('from_id', userId);
+      
+      // ページネーション
+      if (options.first) {
+        endpoint.searchParams.append('first', options.first);
+      } else {
+        endpoint.searchParams.append('first', 100); // デフォルト最大値
+      }
+      
+      if (options.after) {
+        endpoint.searchParams.append('after', options.after);
+      }
+      
+      // APIリクエスト
+      const data = await this.request(endpoint.toString());
+      
+      return data.data;
+    } catch (error) {
+      throw this.handleApiError(error, 'getFollowedChannels');
+    }
+  }
+
+  /**
+   * ストリーム情報を取得します
+   * @param {Object} options - 取得オプション
+   * @return {Promise<Array<Stream>>} - ストリーム情報の配列
+   * @override
+   */
+  async getStreams(options = {}) {
+    try {
+      // 認証状態の確認
+      await this.checkTokenExpiration();
+      
+      // オプションの準備
+      const endpoint = new URL(`${this.baseUrl}/streams`);
+      
+      // ゲーム/カテゴリによるフィルタリング
+      if (options.gameId) {
+        endpoint.searchParams.append('game_id', options.gameId);
+      }
+      
+      // 特定のユーザーのストリームを取得
+      if (options.userId) {
+        endpoint.searchParams.append('user_id', Array.isArray(options.userId) ? options.userId.join('&user_id=') : options.userId);
+      }
+      
+      // 言語フィルタリング
+      if (options.language) {
+        endpoint.searchParams.append('language', options.language);
+      }
+      
+      // ページネーション
+      if (options.first) {
+        endpoint.searchParams.append('first', options.first);
+      } else {
+        endpoint.searchParams.append('first', 20); // デフォルト
+      }
+      
+      if (options.after) {
+        endpoint.searchParams.append('after', options.after);
+      }
+      
+      // APIリクエスト
+      const data = await this.request(endpoint.toString());
+      
+      // レスポンスデータをStreamモデルに変換
+      return data.data.map(stream => new Stream({
+        id: stream.id,
+        title: stream.title,
+        streamerName: stream.user_name,
+        thumbnailUrl: stream.thumbnail_url
+          .replace('{width}', '320')
+          .replace('{height}', '180'),
+        platformType: 'twitch',
+        startedAt: new Date(stream.started_at).getTime(),
+        viewerCount: stream.viewer_count,
+        gameOrCategory: stream.game_name,
+        url: `https://twitch.tv/${stream.user_login}`,
+        isFavorite: false, // お気に入り状態は別途設定
+        notified: false // 通知済みかどうかも別途設定
+      }));
+    } catch (error) {
+      throw this.handleApiError(error, 'getStreams');
+    }
+  }
+
+  /**
+   * スケジュール情報を取得します
+   * @param {Object} options - 取得オプション
+   * @return {Promise<Array<Schedule>>} - スケジュール情報の配列
+   * @override
+   */
+  async getSchedules(options = {}) {
+    // スケジュール機能の実装は今後のフェーズで行う
+    return Promise.resolve([]);
+  }
+}
+
+export default TwitchAPIClient;

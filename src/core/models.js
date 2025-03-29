@@ -52,6 +52,8 @@ export class Auth {
     this.isAuthorized = data.isAuthorized || false; // 認証済みフラグ
     this.userId = data.userId || '';          // プラットフォーム上のユーザーID
     this.userName = data.userName || '';      // プラットフォーム上のユーザー名
+    this.scope = data.scope || '';            // 認証されたスコープ（スペース区切り）
+    this.lastValidated = data.lastValidated || 0; // 最後にトークンを検証した時刻
   }
 }
 
