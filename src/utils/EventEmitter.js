@@ -79,6 +79,23 @@ class EventEmitter {
   listenerCount(event) {
     return this._events[event] ? this._events[event].length : 0;
   }
+  
+  /**
+   * すべてのイベントリスナーを解除します
+   * @return {EventEmitter} - メソッドチェーン用のインスタンス自身
+   */
+  removeAllListeners() {
+    this._events = {};
+    return this;
+  }
+  
+  /**
+   * 登録されているすべてのイベント名を配列で返します
+   * @return {Array<string>} - イベント名の配列
+   */
+  eventNames() {
+    return Object.keys(this._events);
+  }
 }
 
 export default EventEmitter;
